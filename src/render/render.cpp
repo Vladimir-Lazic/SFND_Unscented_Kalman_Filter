@@ -20,7 +20,7 @@ void renderHighway(double distancePos, pcl::visualization::PCLVisualizer::Ptr& v
     viewer->addLine(pcl::PointXYZ(roadLengthBehind, roadWidth / 6, 0.01), pcl::PointXYZ(roadLengthAhead, roadWidth / 6, 0.01), 1, 1, 0, "line2");
 
     // render poles
-    // spacing in meters between poles, poles start at x = 0
+    // spacing in meters between poles,  poles start at x = 0
     double poleSpace = 10;
     // pole distance from road curve
     double poleCurve = 4;

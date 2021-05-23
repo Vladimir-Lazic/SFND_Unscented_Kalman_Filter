@@ -2,7 +2,6 @@
 #define MEASUREMENT_PACKAGE_H_
 
 #include "Eigen/Dense"
-
 class MeasurementPackage {
 public:
     long timestamp_;
