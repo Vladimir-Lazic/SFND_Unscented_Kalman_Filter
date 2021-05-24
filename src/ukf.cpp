@@ -236,6 +236,10 @@ void UKF::Prediction(double delta_t)
         Eigen::VectorXd x_diff_ = Xsig_pred_.col(i) - x_predicted_;
 
         // angle normalization
+        /*if (x_diff_(3) > M_PI || x_diff_(3) < -M_PI) {
+            x_diff_(3) = atan2(sin(x_diff_(3)), cos(x_diff_(3)));
+        }*/
+
         while (x_diff_(3) > M_PI)
             x_diff_(3) -= 2. * M_PI;
         while (x_diff_(3) < -M_PI)
