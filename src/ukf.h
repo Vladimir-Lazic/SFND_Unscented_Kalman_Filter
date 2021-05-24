@@ -7,38 +7,44 @@
 class UKF {
 public:
     /**
-   * Constructor
-   */
+     * Constructor
+    */
     UKF();
 
     /**
-   * Destructor
-   */
+     * Destructor
+    */
     virtual ~UKF();
 
     /**
-   * ProcessMeasurement
-   * @param meas_package The latest measurement data of either radar or laser
-   */
+     * ProcessMeasurement
+     * @param meas_package The latest measurement data of either radar or laser
+    */
     void ProcessMeasurement(MeasurementPackage meas_package);
 
     /**
-   * Prediction Predicts sigma points, the state, and the state covariance
-   * matrix
-   * @param delta_t Time between k and k+1 in s
-   */
+     * Prediction Predicts sigma points, the state, and the state covariance
+     * matrix
+     * @param delta_t Time between k and k+1 in s
+    */
     void Prediction(double delta_t);
 
     /**
-   * Updates the state and the state covariance matrix using a laser measurement
-   * @param meas_package The measurement at k+1
-   */
+     * Updates the state and the state covariance matrix
+     * @param meas_package The measurement at k+1
+    */
+    void Update(MeasurementPackage meas_package);
+
+    /**
+     * Updates the state and the state covariance matrix using a laser measurement
+     * @param meas_package The measurement at k+1
+    */
     void UpdateLidar(MeasurementPackage meas_package);
 
     /**
-   * Updates the state and the state covariance matrix using a radar measurement
-   * @param meas_package The measurement at k+1
-   */
+     * Updates the state and the state covariance matrix using a radar measurement
+     * @param meas_package The measurement at k+1
+    */
     void UpdateRadar(MeasurementPackage meas_package);
 
     // initially set to false, set to true in first call of ProcessMeasurement
@@ -61,6 +67,9 @@ public:
 
     // time when the state is true, in us
     long long time_us_;
+
+    // previous timestamp
+    double previous_timestamp_;
 
     // Process noise standard deviation longitudinal acceleration in m/s^2
     double std_a_;
@@ -87,10 +96,13 @@ public:
     Eigen::VectorXd weights_;
 
     // State dimension
-    int n_x_;
+    std::uint8_t n_x_;
 
     // Augmented state dimension
-    int n_aug_;
+    std::uint8_t n_aug_;
+
+    // Number of sigma points
+    std::uint8_t sigma_points_num_;
 
     // Sigma point spreading parameter
     double lambda_;
