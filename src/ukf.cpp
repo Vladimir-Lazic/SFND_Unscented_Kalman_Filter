@@ -107,8 +107,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package)
             // Converting radar measurement to CTRV model state space
             px = (rho * cos(phi) < 0.0001) ? 0.0001 : rho * cos(phi);
             py = (rho * sin(phi) < 0.0001) ? 0.0001 : rho * sin(phi);
-            speed = rho_dot;
-            yaw = phi;
 
         } else {
             // Initialize for lidar measurement
@@ -311,12 +309,8 @@ void UKF::UpdateRadar(MeasurementPackage meas_package)
         double vx = speed * cos(yaw);
         double vy = speed * sin(yaw);
 
-        if (fabs(px) <= 0.0001) {
-            px = 0.0001;
-        }
-        if (fabs(py) <= 0.0001) {
-            py = 0.0001;
-        }
+        px = (fabs(px) <= 0.0001) ? 0.0001 : px;
+        py = (fabs(py) <= 0.0001) ? 0.0001 : py;
 
         Z_sigma_points_(0, i) = sqrt(px * px + py * py);
         Z_sigma_points_(1, i) = atan2(py, px);
