@@ -21,9 +21,11 @@ UKF::UKF()
 
     // initial state vector
     x_ = VectorXd(5);
+    x_.fill(0.0);
 
     // initial covariance matrix
     P_ = MatrixXd(5, 5);
+    P_ = MatrixXd::Identity(5, 5);
 
     // Process noise standard deviation longitudinal acceleration in m/s^2
     std_a_ = 3;
@@ -82,7 +84,7 @@ UKF::UKF()
     }
 
     // Sigma points vector
-    Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1);
+    Xsig_pred_ = MatrixXd(n_x_, sigma_points_num_);
 }
 
 UKF::~UKF() { }
@@ -95,10 +97,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package)
    */
 
     if (!is_initialized_) {
-        x_.fill(0.0);
-        P_ = MatrixXd::Identity(5, 5);
         double px = 0.0, py = 0.0, speed = 0.0, yaw = 0.0, yaw_rate = 0.0;
-
         if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
             // Initialize for radar measurement
             double rho = meas_package.raw_measurements_[0];
@@ -147,12 +146,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package)
 
 void UKF::Prediction(double delta_t)
 {
-    /**
-     * TODO: Complete this function! Estimate the object's location. 
-     * Modify the state vector, x_. Predict sigma points, the state, 
-     * and the state covariance matrix.
-    */
-
     // Augmented state vector
     Eigen::VectorXd x_aug_ = Eigen::VectorXd(n_aug_);
     // Augmented process covariance
@@ -196,8 +189,8 @@ void UKF::Prediction(double delta_t)
         // Apply the process model on the
         // check for zero yaw rate
         if (yaw_rate < 0.0001) {
-            px_p = speed * cos(yaw);
-            py_p = speed * sin(yaw);
+            px_p = px + speed * cos(yaw) * delta_t;
+            py_p = py + speed * sin(yaw) * delta_t;
         } else {
             double speed_to_yaw_rate = speed / yaw_rate;
             px_p = px + speed_to_yaw_rate * (sin(yaw + yaw_rate * delta_t) - sin(yaw));
@@ -236,10 +229,6 @@ void UKF::Prediction(double delta_t)
         Eigen::VectorXd x_diff_ = Xsig_pred_.col(i) - x_predicted_;
 
         // angle normalization
-        /*if (x_diff_(3) > M_PI || x_diff_(3) < -M_PI) {
-            x_diff_(3) = atan2(sin(x_diff_(3)), cos(x_diff_(3)));
-        }*/
-
         while (x_diff_(3) > M_PI)
             x_diff_(3) -= 2. * M_PI;
         while (x_diff_(3) < -M_PI)
@@ -251,18 +240,12 @@ void UKF::Prediction(double delta_t)
     // Update vector x_
     x_ = x_predicted_;
     P_ = P_predicted_;
-
-    std::cout << "x : " << std::endl;
-    std::cout << x_.format(HeavyFmt) << std::endl;
-
-    std::cout << "P : " << std::endl;
-    std::cout << P_.format(HeavyFmt) << std::endl;
 }
 
 void UKF::Update(MeasurementPackage meas_package)
 {
     if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
-        UpdateRadar(meas_package);
+        // UpdateRadar(meas_package);
     } else {
         UpdateLidar(meas_package);
     }
@@ -270,20 +253,113 @@ void UKF::Update(MeasurementPackage meas_package)
 
 void UKF::UpdateLidar(MeasurementPackage meas_package)
 {
-    /**
-     * TODO: Complete this function! Use lidar data to update the belief 
-     * about the object's position. Modify the state vector, x_, and 
-     * covariance, P_.
-     * You can also calculate the lidar NIS, if desired.
-    */
+    std::uint8_t n_z_ = 2; // number of state dimetnions: px, py
+    Eigen::MatrixXd H_ = Eigen::MatrixXd(n_z_, n_x_); // measurement matrix
+    Eigen::MatrixXd R_ = Eigen::MatrixXd(n_z_, n_z_); // measurement noise covariance matrix
+
+    Eigen::VectorXd z_ = Eigen::VectorXd(n_z_); // measurement vector
+    Eigen::MatrixXd S_ = Eigen::MatrixXd(n_z_, n_z_); // measurement covariance
+    Eigen::MatrixXd K_ = Eigen::MatrixXd(n_z_, n_z_); // Kalman gain
+
+    Eigen::VectorXd y_ = Eigen::VectorXd(n_z_); // error
+
+    Eigen::MatrixXd I_ = Eigen::MatrixXd::Identity(n_x_, n_x_);
+
+    H_ << 1, 0, 0, 0, 0,
+        0, 1, 0, 0, 0;
+
+    R_ << std_laspx_ * std_laspx_, 0,
+        0, std_laspy_ * std_laspy_;
+
+    z_ = meas_package.raw_measurements_;
+
+    y_ = z_ - H_ * x_;
+    S_ = H_ * P_ * H_.transpose() + R_;
+
+    K_ = P_ * H_.transpose() * S_.inverse();
+
+    x_ = x_ + K_ * y_;
+    P_ = (I_ - K_ * H_) * P_;
 }
 
 void UKF::UpdateRadar(MeasurementPackage meas_package)
 {
-    /**
-   * TODO: Complete this function! Use radar data to update the belief 
-   * about the object's position. Modify the state vector, x_, and 
-   * covariance, P_.
-   * You can also calculate the radar NIS, if desired.
-   */
+    std::uint8_t n_z_ = 3; // number of state dimetnions : rho, phi, rho dot
+    Eigen::MatrixXd R_ = Eigen::MatrixXd(n_z_, n_z_); // measurement noise covariance matrix
+    Eigen::MatrixXd Z_sigma_points_ = Eigen::MatrixXd(n_z_, sigma_points_num_);
+    Eigen::VectorXd z_ = Eigen::VectorXd(n_z_); // measurement mean vector
+    Eigen::MatrixXd S_ = Eigen::MatrixXd(n_z_, n_z_); // measurement covariance
+
+    Eigen::MatrixXd T_ = Eigen::MatrixXd(n_x_, n_z_); // cross corelation between sigma points in state space and measurement space
+
+    R_ << std_radr_ * std_radr_, 0, 0,
+        0, std_radphi_ * std_radphi_, 0,
+        0, 0, std_radrd_ * std_radrd_;
+
+    z_.fill(0.0);
+    S_.fill(0.0);
+    T_.fill(0.0);
+
+    // Apply the measurement function on predicted sigma points
+    Z_sigma_points_.fill(0.0);
+    for (int i = 0; i < sigma_points_num_; i++) {
+        double px = Xsig_pred_(0, i);
+        double py = Xsig_pred_(1, i);
+        double speed = Xsig_pred_(2, i);
+        double yaw = Xsig_pred_(3, i);
+
+        double vx = speed * cos(yaw);
+        double vy = speed * sin(yaw);
+
+        if (fabs(px) <= 0.0001) {
+            px = 0.0001;
+        }
+        if (fabs(py) <= 0.0001) {
+            py = 0.0001;
+        }
+
+        Z_sigma_points_(0, i) = sqrt(px * px + py * py);
+        Z_sigma_points_(1, i) = atan2(py, px);
+        Z_sigma_points_(2, i) = (px * vx + py * vy) / sqrt(px * px + py * py);
+    }
+
+    // Predict the measurement mean
+    for (int i = 0; i < sigma_points_num_; i++) {
+        z_ = z_ + weights_(i) * Z_sigma_points_.col(i);
+    }
+
+    // Predict the measurement covariance
+    for (int i = 0; i < sigma_points_num_; i++) {
+        Eigen::VectorXd measurement_diff = Z_sigma_points_.col(i) - z_;
+        S_ = S_ + weights_(i) * measurement_diff * measurement_diff.transpose();
+    }
+    S_ = S_ + R_;
+
+    // Calculate cross corelation between sigma points in state space and measurement space
+    for (int i = 0; i < sigma_points_num_; i++) {
+        Eigen::VectorXd z_diff = Z_sigma_points_.col(i) - z_;
+        while (z_diff(1) > M_PI)
+            z_diff(1) -= 2. * M_PI;
+        while (z_diff(1) < -M_PI)
+            z_diff(1) += 2. * M_PI;
+
+        Eigen::VectorXd x_diff = Xsig_pred_.col(i) - x_;
+        while (x_diff(3) > M_PI)
+            x_diff(3) -= 2. * M_PI;
+        while (x_diff(3) < -M_PI)
+            x_diff(3) += 2. * M_PI;
+
+        T_ = T_ + weights_(i) * x_diff * z_diff.transpose();
+    }
+
+    // Update x_ and P_
+    Eigen::MatrixXd K_ = T_ * S_.inverse();
+
+    Eigen::VectorXd z_diff = meas_package.raw_measurements_ - z_;
+    if (z_diff(3) > M_PI || z_diff(3) < -M_PI) {
+        z_diff(3) = atan2(sin(z_diff(3)), cos(z_diff(3)));
+    }
+
+    x_ = x_ + K_ * z_diff;
+    P_ = P_ - K_ * S_ * K_.transpose();
 }
