@@ -19,16 +19,8 @@ UKF::UKF()
     // if this is false, radar measurements will be ignored (except during init)
     use_radar_ = true;
 
-    // initial state vector
-    x_ = VectorXd(5);
-    x_.fill(0.0);
-
-    // initial covariance matrix
-    P_ = MatrixXd(5, 5);
-    P_ = MatrixXd::Identity(5, 5);
-
     // Process noise standard deviation longitudinal acceleration in m/s^2
-    std_a_ = 3;
+    std_a_ = 1.0;
 
     // Process noise standard deviation yaw acceleration in rad/s^2
     std_yawdd_ = 0.5;
@@ -63,10 +55,18 @@ UKF::UKF()
    */
 
     is_initialized_ = false;
-    previous_timestamp_ = 0.0;
+    time_us_ = 0;
 
     // State dimensions: px, py, speed, yaw, yaw rate
     n_x_ = 5;
+
+    // initial state vector
+    x_ = VectorXd(n_x_);
+    x_.fill(0.0);
+
+    // initial covariance matrix
+    P_ = MatrixXd(n_x_, n_x_);
+    P_ = MatrixXd::Identity(5, 5);
 
     // Augmented state dimensions: state dimetnions + lateral acceleration nose and yaw acceleration noise
     n_aug_ = 7;
@@ -121,7 +121,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package)
         x_(3) = yaw;
         x_(4) = yaw_rate;
 
-        previous_timestamp_ = meas_package.timestamp_;
+        time_us_ = meas_package.timestamp_;
 
         is_initialized_ = true;
         std::cout << "Initialized Unscented Kalman Filter" << std::endl;
@@ -132,7 +132,9 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package)
         Predict
     */
 
-    double delta_t = meas_package.timestamp_ = previous_timestamp_;
+    double delta_t = (meas_package.timestamp_ - time_us_) / 1000000.0;
+    time_us_ = meas_package.timestamp_;
+
     Prediction(delta_t);
 
     /*
@@ -312,7 +314,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package)
         px = (fabs(px) <= 0.0001) ? 0.0001 : px;
         py = (fabs(py) <= 0.0001) ? 0.0001 : py;
 
-        Z_sigma_points_(0, i) = sqrt(px * px + py * py);
+        Z_sigma_points_(0, i) = sqrt(px * px + py * py) > 0.0001 ? sqrt(px * px + py * py) : 0.0001;
         Z_sigma_points_(1, i) = atan2(py, px);
         Z_sigma_points_(2, i) = (px * vx + py * vy) / sqrt(px * px + py * py);
     }
@@ -324,8 +326,8 @@ void UKF::UpdateRadar(MeasurementPackage meas_package)
 
     // Predict the measurement covariance
     for (int i = 0; i < sigma_points_num_; i++) {
-        Eigen::VectorXd measurement_diff = Z_sigma_points_.col(i) - z_;
-        S_ = S_ + weights_(i) * measurement_diff * measurement_diff.transpose();
+        Eigen::VectorXd z_diff = Z_sigma_points_.col(i) - z_;
+        S_ = S_ + weights_(i) * z_diff * z_diff.transpose();
     }
     S_ = S_ + R_;
 
@@ -350,9 +352,10 @@ void UKF::UpdateRadar(MeasurementPackage meas_package)
     Eigen::MatrixXd K_ = T_ * S_.inverse();
 
     Eigen::VectorXd z_diff = meas_package.raw_measurements_ - z_;
-    if (z_diff(3) > M_PI || z_diff(3) < -M_PI) {
-        z_diff(3) = atan2(sin(z_diff(3)), cos(z_diff(3)));
-    }
+    while (z_diff(1) > M_PI)
+        z_diff(1) -= 2. * M_PI;
+    while (z_diff(1) < -M_PI)
+        z_diff(1) += 2. * M_PI;
 
     x_ = x_ + K_ * z_diff;
     P_ = P_ - K_ * S_ * K_.transpose();
