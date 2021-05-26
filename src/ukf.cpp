@@ -101,32 +101,30 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package)
    */
 
     if (!is_initialized_) {
-        double px = 0.0, py = 0.0, speed = 0.0, yaw = 0.0, yaw_rate = 0.0;
         if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
             // Initialize for radar measurement
-            double rho = meas_package.raw_measurements_[0];
-            double phi = meas_package.raw_measurements_[1];
-            double rho_dot = meas_package.raw_measurements_[3];
+            double rho = meas_package.raw_measurements_(0);
+            double phi = meas_package.raw_measurements_(1);
+            double rho_dot = meas_package.raw_measurements_(3);
 
             // Converting radar measurement to CTRV model state space
-            px = rho * cos(phi);
-            py = rho * sin(phi);
+            double px = rho * cos(phi);
+            double py = rho * sin(phi);
+
+            x_ << px,
+                py,
+                0,
+                0,
+                0;
 
         } else {
             // Initialize for lidar measurement
-            px = meas_package.raw_measurements_[0];
-            px = meas_package.raw_measurements_[1];
+            x_ << meas_package.raw_measurements_(0),
+                meas_package.raw_measurements_(1),
+                0,
+                0,
+                0;
         }
-
-        px = (px < 0.0001) ? 0.0001 : px;
-        py = (py < 0.0001) ? 0.0001 : py;
-
-        // Assing values to vector x
-        x_(0) = px;
-        x_(1) = py;
-        x_(2) = speed;
-        x_(3) = yaw;
-        x_(4) = yaw_rate;
 
         time_us_ = meas_package.timestamp_;
 
