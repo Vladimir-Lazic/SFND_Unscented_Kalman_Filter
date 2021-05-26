@@ -66,7 +66,11 @@ UKF::UKF()
 
     // initial covariance matrix
     P_ = MatrixXd(n_x_, n_x_);
-    P_ = MatrixXd::Identity(5, 5);
+    P_ << 1, 0, 0, 0, 0,
+        0, 1, 0, 0, 0,
+        0, 0, 1, 0, 0,
+        0, 0, 0, 0.0225, 0,
+        0, 0, 0, 0, .0225;
 
     // Augmented state dimensions: state dimetnions + lateral acceleration nose and yaw acceleration noise
     n_aug_ = 7;
@@ -105,14 +109,17 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package)
             double rho_dot = meas_package.raw_measurements_[3];
 
             // Converting radar measurement to CTRV model state space
-            px = (rho * cos(phi) < 0.0001) ? 0.0001 : rho * cos(phi);
-            py = (rho * sin(phi) < 0.0001) ? 0.0001 : rho * sin(phi);
+            px = rho * cos(phi);
+            py = rho * sin(phi);
 
         } else {
             // Initialize for lidar measurement
             px = meas_package.raw_measurements_[0];
             px = meas_package.raw_measurements_[1];
         }
+
+        px = (px < 0.0001) ? 0.0001 : px;
+        py = (py < 0.0001) ? 0.0001 : py;
 
         // Assing values to vector x
         x_(0) = px;
@@ -245,7 +252,7 @@ void UKF::Prediction(double delta_t)
 void UKF::Update(MeasurementPackage meas_package)
 {
     if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
-        // UpdateRadar(meas_package);
+        UpdateRadar(meas_package);
     } else {
         UpdateLidar(meas_package);
     }
